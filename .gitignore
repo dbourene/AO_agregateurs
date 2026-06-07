@@ -1,0 +1,6 @@
+supabase/.temp/
+supabase/.branches/
+.env
+.env.*
+node_modules/
+*.pdf
