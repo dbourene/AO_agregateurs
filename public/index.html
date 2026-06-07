@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kinjo · AO Agrégateurs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f5f2; --panel:#ffffff; --ink:#1c2218; --muted:#6b7368;
+    --line:#e2e5dc; --green:#74a83f; --green-soft:#eef4e4; --green-deep:#3f5e22;
+    --danger:#c0492f; --shadow:0 1px 2px rgba(28,34,24,.06),0 8px 24px rgba(28,34,24,.06);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'Hanken Grotesk',system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #e9f0df 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink); -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum"}
+
+  /* ---------- LOGIN ---------- */
+  #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:38px 34px;width:min(380px,92vw)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em;font-size:19px}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+  .card h1{font-size:15px;font-weight:600;color:var(--muted);margin:22px 0 16px}
+  input[type=password],input[type=text],input[type=number]{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:11px;
+    font:inherit;background:#fbfcf9;color:var(--ink);outline:none;transition:.15s}
+  input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft);background:#fff}
+  .btn{appearance:none;border:none;cursor:pointer;font:inherit;font-weight:700;
+    padding:12px 18px;border-radius:11px;background:var(--green);color:#fff;transition:.15s}
+  .btn:hover{background:var(--green-deep)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.ghost:hover{background:#f0f2ec}
+  .btn.sm{padding:7px 12px;font-size:13px;border-radius:9px}
+  #loginBtn{width:100%;margin-top:14px}
+  .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:10px}
+
+  /* ---------- APP ---------- */
+  #app{display:none;max-width:1180px;margin:0 auto;padding:26px 22px 80px}
+  header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .sub{color:var(--muted);font-size:14px;margin:2px 0 26px}
+  .section-h{display:flex;align-items:baseline;gap:12px;margin:8px 0 16px}
+  .section-h h2{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0}
+  .count{color:var(--muted);font-size:13px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:16px}
+
+  .tile{position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;min-height:172px;
+    display:flex;flex-direction:column;transition:.18s;cursor:pointer}
+  .tile:hover{border-color:#cfd8c2;transform:translateY(-2px)}
+  .tile.sel{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft),var(--shadow)}
+  .tile.drop{border-color:var(--green);border-style:dashed;background:var(--green-soft)}
+  .tile .name{font-weight:700;font-size:15px;line-height:1.25;padding-right:26px;word-break:break-word}
+  .tile .name input{font:inherit;font-weight:700;padding:4px 6px}
+  .tile .total{margin-top:auto}
+  .tile .total .v{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .tile .total .u{color:var(--muted);font-weight:600;font-size:13px;margin-left:4px}
+  .tile .meta{color:var(--muted);font-size:12.5px;margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:#f0f2ec;border-radius:999px;padding:3px 9px}
+  .chip input{width:64px;padding:2px 6px;font-size:12px}
+  .dots{position:absolute;top:12px;right:12px;border:none;background:transparent;cursor:pointer;
+    font-size:20px;line-height:1;color:var(--muted);padding:2px 8px;border-radius:8px}
+  .dots:hover{background:#f0f2ec;color:var(--ink)}
+  .menu{position:absolute;top:40px;right:12px;background:#fff;border:1px solid var(--line);
+    border-radius:11px;box-shadow:var(--shadow);padding:6px;display:none;z-index:5;min-width:160px}
+  .menu.open{display:block}
+  .menu button{display:block;width:100%;text-align:left;border:none;background:transparent;
+    font:inherit;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+  .menu button:hover{background:#f0f2ec}
+  .menu button.del{color:var(--danger)}
+
+  .add{border:2px dashed #c5cfb6;border-radius:var(--radius);background:transparent;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--muted);min-height:172px;cursor:pointer;transition:.18s;text-align:center;padding:18px}
+  .add:hover,.add.drop{border-color:var(--green);background:var(--green-soft);color:var(--green-deep)}
+  .add .plus{font-size:30px;font-weight:300;line-height:1}
+  .add small{font-size:12px;max-width:180px}
+
+  .empty{color:var(--muted);font-size:14px;padding:6px 2px}
+
+  /* ---------- MODAL ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(28,34,24,.32);display:none;
+    align-items:center;justify-content:center;z-index:40;padding:18px}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:26px;width:min(440px,94vw)}
+  .modal h3{margin:0 0 4px;font-size:18px;letter-spacing:-.01em}
+  .modal .info{background:var(--green-soft);border:1px solid #d8e6c5;border-radius:11px;
+    padding:11px 13px;font-size:13px;color:var(--green-deep);margin:14px 0 18px;line-height:1.5}
+  .modal label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 6px}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
+  .warn{color:var(--danger)}
+
+  /* ---------- TOAST ---------- */
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:12px 18px;border-radius:11px;font-size:14px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.bad{background:var(--danger)}
+  .logout{font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="card">
+    <div class="brand"><span class="dot"></span> Kinjo · AO Agrégateurs</div>
+    <h1>Accès protégé — saisissez le mot de passe</h1>
+    <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password" />
+    <button id="loginBtn" class="btn">Entrer</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="top">
+    <div class="brand"><span class="dot"></span> Kinjo · AO Agrégateurs</div>
+    <button class="btn ghost sm logout" id="logoutBtn">Se déconnecter</button>
+  </header>
+  <div class="sub">Simulateur de valorisation du surplus d'autoconsommation collective.</div>
+
+  <div class="section-h">
+    <h2>Courbes de charge type</h2>
+    <span class="count" id="courbesCount"></span>
+  </div>
+  <div class="grid" id="courbesGrid"></div>
+</div>
+
+<!-- MODAL création -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h3>Nouvelle courbe de charge</h3>
+    <div class="info" id="modalInfo"></div>
+    <label>Nom</label>
+    <input type="text" id="mNom" placeholder="Nom de la courbe" />
+    <label>Puissance (kWc) <span style="font-weight:400">— optionnel, requis pour l'abonnement €/kWc</span></label>
+    <input type="number" id="mKwc" placeholder="ex. 36" step="0.1" />
+    <div class="row">
+      <button class="btn ghost" id="mCancel">Annuler</button>
+      <button class="btn" id="mSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const FN = "https://ygkjzsrabtssbgzjlrjb.supabase.co/functions/v1";
+let TOKEN = sessionStorage.getItem("ao_token") || null;
+let pendingPoints = null; // points parsés en attente d'enregistrement
+
+/* ---------- utilitaires ---------- */
+function toast(msg, bad=false){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.className=bad?"show bad":"show";
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className=t.className.replace("show","").trim(),3200);
+}
+function show(el,on){document.getElementById(el).style.display=on?"":"none";}
+
+/* ---------- API ---------- */
+async function apiAuth(password){
+  const r=await fetch(FN+"/ao-auth",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({password})});
+  if(!r.ok) throw new Error("invalid_password");
+  return (await r.json()).token;
+}
+async function apiData(action,data){
+  const r=await fetch(FN+"/ao-data",{method:"POST",
+    headers:{"Content-Type":"application/json","X-AO-Token":TOKEN||""},
+    body:JSON.stringify({action,data})});
+  if(r.status===401){ logout(); throw new Error("session expirée"); }
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.detail||j.error||"erreur");
+  return j;
+}
+
+/* ---------- login ---------- */
+function enterApp(){ show("login",false); document.getElementById("app").style.display="block"; loadCourbes(); }
+function logout(){
+  TOKEN=null; sessionStorage.removeItem("ao_token");
+  document.getElementById("app").style.display="none"; show("login",true);
+  document.getElementById("pw").value="";
+}
+document.getElementById("loginBtn").onclick=async()=>{
+  const pw=document.getElementById("pw").value, err=document.getElementById("loginErr");
+  err.textContent=""; if(!pw)return;
+  try{ TOKEN=await apiAuth(pw); sessionStorage.setItem("ao_token",TOKEN); enterApp(); }
+  catch{ err.textContent="Mot de passe incorrect."; }
+};
+document.getElementById("pw").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginBtn").click();});
+document.getElementById("logoutBtn").onclick=logout;
+
+/* ---------- parsing Excel ---------- */
+function parseExcel(arrayBuffer){
+  const wb=XLSX.read(arrayBuffer,{type:"array"});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true});
+  // détecte une ligne d'en-tête : 2e cellule non numérique
+  let start=0;
+  if(rows.length && (rows[0][1]===undefined || !isFinite(Number(rows[0][1])))) start=1;
+  const ts=[], vals=[];
+  for(let i=start;i<rows.length;i++){
+    const r=rows[i]; if(!r||r.length===0) continue;
+    const v=Number(r[1]); if(!isFinite(v)) continue;
+    ts.push(r[0]); vals.push(v);
+  }
+  // contrôle du pas (si horodatages = numéros de série Excel)
+  let stepOk=true, stepInfo="indéterminé";
+  const numericTs=ts.filter(x=>typeof x==="number");
+  if(numericTs.length>2){
+    const d=numericTs[1]-numericTs[0]; const target=1/48; // 30 min en fraction de jour
+    let bad=0;
+    for(let i=1;i<Math.min(numericTs.length,200);i++){
+      if(Math.abs((numericTs[i]-numericTs[i-1])-target)>1e-4) bad++;
+    }
+    stepOk=Math.abs(d-target)<1e-4 && bad===0;
+    stepInfo=stepOk?"30 min ✓":"irrégulier ⚠";
+  }
+  const total=Math.round(vals.reduce((a,b)=>a+b,0)*1000)/1000;
+  return {vals,total,stepOk,stepInfo};
+}
+
+/* ---------- rendu vignettes ---------- */
+function tileHTML(c){
+  const kwc=c.puissance_kwc!=null?c.puissance_kwc:"—";
+  return `
+  <div class="tile" data-id="${c.id}" data-nom="${escapeAttr(c.nom)}" data-kwc="${c.puissance_kwc??""}">
+    <button class="dots" title="Options">⋯</button>
+    <div class="menu">
+      <button data-act="rename">Renommer</button>
+      <button data-act="kwc">Modifier la puissance</button>
+      <button data-act="del" class="del">Supprimer</button>
+    </div>
+    <div class="name">${escapeHTML(c.nom)}</div>
+    <div class="total"><span class="v mono">${formatNb(c.total_kwh)}</span><span class="u">kWh</span></div>
+    <div class="meta"><span class="chip">${kwc} kWc</span></div>
+  </div>`;
+}
+function escapeHTML(s){return String(s).replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+function escapeAttr(s){return String(s).replace(/"/g,"&quot;");}
+function formatNb(n){return (n==null?0:n).toLocaleString("fr-FR",{maximumFractionDigits:0});}
+
+async function loadCourbes(){
+  const grid=document.getElementById("courbesGrid");
+  grid.innerHTML='<div class="empty">Chargement…</div>';
+  let list=[];
+  try{ list=(await apiData("list_courbes")).courbes||[]; }
+  catch(e){ grid.innerHTML=`<div class="empty warn">${e.message}</div>`; return; }
+
+  document.getElementById("courbesCount").textContent=list.length+" courbe"+(list.length>1?"s":"");
+  grid.innerHTML = list.map(tileHTML).join("") + `
+    <div class="add" id="addZone">
+      <div class="plus">+</div>
+      <div>Nouvelle courbe</div>
+      <small>Glissez un fichier Excel ici, ou cliquez pour parcourir.</small>
+    </div>`;
+  wireTiles(); wireAddZone();
+}
+
+/* ---------- interactions vignettes ---------- */
+function wireTiles(){
+  document.querySelectorAll(".tile").forEach(tile=>{
+    const id=tile.dataset.id;
+    // menu ⋯
+    const dots=tile.querySelector(".dots"), menu=tile.querySelector(".menu");
+    dots.onclick=e=>{e.stopPropagation();document.querySelectorAll(".menu.open").forEach(m=>m!==menu&&m.classList.remove("open"));menu.classList.toggle("open");};
+    menu.querySelectorAll("button").forEach(b=>b.onclick=e=>{e.stopPropagation();menu.classList.remove("open");menuAction(b.dataset.act,tile);});
+    // sélection (une seule)
+    tile.onclick=()=>{
+      const wasSel=tile.classList.contains("sel");
+      document.querySelectorAll(".tile.sel").forEach(t=>t.classList.remove("sel"));
+      if(!wasSel) tile.classList.add("sel");
+    };
+    // drop pour mise à jour
+    tile.addEventListener("dragover",e=>{e.preventDefault();tile.classList.add("drop");});
+    tile.addEventListener("dragleave",()=>tile.classList.remove("drop"));
+    tile.addEventListener("drop",async e=>{
+      e.preventDefault();e.stopPropagation();tile.classList.remove("drop");
+      const f=e.dataTransfer.files[0]; if(!f)return;
+      const parsed=await readFile(f);
+      if(!parsed)return;
+      if(!confirm(`Mettre à jour « ${tile.dataset.nom} » avec ce fichier ?\nNouveau total : ${formatNb(parsed.total)} kWh (${parsed.vals.length} points, pas ${parsed.stepInfo}).`))return;
+      try{
+        await apiData("upsert_courbe",{id,nom:tile.dataset.nom,
+          puissance_kwc:tile.dataset.kwc===""?null:Number(tile.dataset.kwc),points:parsed.vals});
+        toast("Courbe mise à jour."); loadCourbes();
+      }catch(err){toast(err.message,true);}
+    });
+  });
+}
+async function menuAction(act,tile){
+  const id=tile.dataset.id;
+  if(act==="del"){
+    if(!confirm(`Supprimer « ${tile.dataset.nom} » ?`))return;
+    try{await apiData("delete_courbe",{id});toast("Courbe supprimée.");loadCourbes();}
+    catch(e){toast(e.message,true);}
+  }
+  if(act==="rename"){
+    const v=prompt("Nouveau nom :",tile.dataset.nom); if(v===null||!v.trim())return;
+    try{await apiData("update_courbe_meta",{id,nom:v.trim()});toast("Renommée.");loadCourbes();}
+    catch(e){toast(e.message,true);}
+  }
+  if(act==="kwc"){
+    const v=prompt("Puissance en kWc (vide = aucune) :",tile.dataset.kwc);
+    if(v===null)return;
+    const val=v.trim()===""?null:Number(v);
+    if(val!==null&&!isFinite(val)){toast("Valeur invalide.",true);return;}
+    try{await apiData("update_courbe_meta",{id,puissance_kwc:val});toast("Puissance mise à jour.");loadCourbes();}
+    catch(e){toast(e.message,true);}
+  }
+}
+
+/* ---------- zone d'ajout ---------- */
+function wireAddZone(){
+  const z=document.getElementById("addZone");
+  z.onclick=()=>{const i=document.createElement("input");i.type="file";i.accept=".xlsx,.xls,.csv";
+    i.onchange=()=>i.files[0]&&openCreate(i.files[0]);i.click();};
+  z.addEventListener("dragover",e=>{e.preventDefault();z.classList.add("drop");});
+  z.addEventListener("dragleave",()=>z.classList.remove("drop"));
+  z.addEventListener("drop",e=>{e.preventDefault();z.classList.remove("drop");
+    const f=e.dataTransfer.files[0];if(f)openCreate(f);});
+}
+function readFile(file){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=()=>{try{res(parseExcel(r.result));}catch(e){toast("Lecture impossible : "+e.message,true);res(null);}};
+    r.onerror=()=>{toast("Erreur de lecture du fichier.",true);res(null);};
+    r.readAsArrayBuffer(file);
+  });
+}
+async function openCreate(file){
+  const parsed=await readFile(file); if(!parsed)return;
+  pendingPoints=parsed.vals;
+  const days=(parsed.vals.length/48).toFixed(1);
+  const expected=(parsed.vals.length===17520||parsed.vals.length===17568);
+  document.getElementById("modalInfo").innerHTML=
+    `${parsed.vals.length} points • ~${days} jours • total <b>${formatNb(parsed.total)} kWh</b><br>`+
+    `Pas de temps : ${parsed.stepInfo}`+
+    (expected?"":` <span class="warn">— attendu 17 520 (année 30 min)</span>`);
+  document.getElementById("mNom").value=file.name.replace(/\.(xlsx|xls|csv)$/i,"");
+  document.getElementById("mKwc").value="";
+  document.getElementById("modal").classList.add("open");
+}
+document.getElementById("mCancel").onclick=()=>document.getElementById("modal").classList.remove("open");
+document.getElementById("mSave").onclick=async()=>{
+  const nom=document.getElementById("mNom").value.trim()||"Sans nom";
+  const kwcRaw=document.getElementById("mKwc").value.trim();
+  const kwc=kwcRaw===""?null:Number(kwcRaw);
+  if(kwc!==null&&!isFinite(kwc)){toast("Puissance invalide.",true);return;}
+  try{
+    await apiData("upsert_courbe",{nom,puissance_kwc:kwc,points:pendingPoints});
+    document.getElementById("modal").classList.remove("open");
+    toast("Courbe enregistrée."); loadCourbes();
+  }catch(e){toast(e.message,true);}
+};
+
+/* fermer menus au clic extérieur */
+document.addEventListener("click",()=>document.querySelectorAll(".menu.open").forEach(m=>m.classList.remove("open")));
+
+/* ---------- démarrage ---------- */
+if(TOKEN){ enterApp(); } else { show("login",true); }
+</script>
+</body>
+</html>
