@@ -111,6 +111,27 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   #toast.bad{background:var(--danger)}
   .logout{font-size:13px}
+
+/* ---------- AGREGATEURS ---------- */
+  .tile.agg{cursor:pointer}
+  .tile.agg .badge{display:inline-block;background:var(--green-soft);color:var(--green-deep);
+    font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;margin-top:auto}
+  .tile.agg .sub2{color:var(--muted);font-size:12.5px;margin-top:8px;line-height:1.5}
+  .modal.wide{width:min(560px,95vw);max-height:90vh;overflow:auto}
+  .modal .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:11px;
+    font:inherit;background:#fbfcf9;color:var(--ink);outline:none}
+  .modal select:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft);background:#fff}
+  .hono{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px}
+  .hono-item{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .hono-item select{flex:1 1 180px}
+  .hono-item input{flex:1 1 90px;width:auto}
+  .hono-item .x{border:none;background:#f0f2ec;color:var(--danger);border-radius:8px;
+    cursor:pointer;font-weight:700;padding:8px 11px}
+  .hono-item .lbl{flex:1 1 100%;font-size:12px;color:var(--muted);margin:-4px 0 2px}
+  .addHono{background:transparent;border:1px dashed #c5cfb6;color:var(--green-deep);
+    border-radius:9px;padding:8px 12px;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
+  .addHono:hover{background:var(--green-soft)}
 </style>
 </head>
 <body>
@@ -139,6 +160,12 @@
     <span class="count" id="courbesCount"></span>
   </div>
   <div class="grid" id="courbesGrid"></div>
+
+  <div class="section-h" style="margin-top:38px">
+    <h2>Agrégateurs</h2>
+    <span class="count" id="aggCount"></span>
+  </div>
+  <div class="grid" id="aggGrid"></div>
 </div>
 
 <!-- MODAL création -->
@@ -153,6 +180,66 @@
     <div class="row">
       <button class="btn ghost" id="mCancel">Annuler</button>
       <button class="btn" id="mSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL agrégateur -->
+<div class="overlay" id="aggModal">
+  <div class="modal wide">
+    <h3 id="aggTitle">Nouvel agrégateur</h3>
+    <label>Nom</label>
+    <input type="text" id="aNom" placeholder="ex. BKW – PRE+" />
+    <div class="grid2">
+      <div>
+        <label>Prix de base</label>
+        <select id="aBase">
+          <option value="aucun">Aucun (coût pur)</option>
+          <option value="epex">EPEX SPOT</option>
+          <option value="prep">PREP (écarts positifs)</option>
+          <option value="fixe">Fixe (€/MWh)</option>
+        </select>
+      </div>
+      <div>
+        <label>Prix fixe (€/MWh)</label>
+        <input type="number" id="aFixe" step="0.01" placeholder="0" />
+      </div>
+      <div>
+        <label>Décote (€/MWh)</label>
+        <input type="number" id="aDecote" step="0.01" placeholder="0" />
+      </div>
+      <div>
+        <label>Partage producteur (%)</label>
+        <input type="number" id="aPartage" step="1" placeholder="100" />
+      </div>
+      <div>
+        <label>Périodicité du bilan</label>
+        <select id="aPeriode">
+          <option value="mensuel">Mensuel</option>
+          <option value="annuel">Annuel</option>
+        </select>
+      </div>
+      <div>
+        <label>Traitement du négatif</label>
+        <select id="aNeg">
+          <option value="plafonne_0">Plafonné à 0 (non imputé)</option>
+          <option value="ajoute_cout">Ajouté au coût</option>
+          <option value="reporte">Reporté</option>
+          <option value="impute_100">100 % imputé</option>
+        </select>
+      </div>
+    </div>
+
+    <label style="margin-top:16px">Honoraires / frais</label>
+    <div class="hono" id="aHono"></div>
+    <button class="addHono" id="aAddHono" type="button">+ Ajouter un composant</button>
+
+    <label style="margin-top:14px">Notes (optionnel)</label>
+    <input type="text" id="aNotes" placeholder="ex. contrat mensuellement reconductible" />
+
+    <div class="row">
+      <button class="btn ghost" id="aCancel">Annuler</button>
+      <button class="btn" id="aSave">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -190,7 +277,7 @@ async function apiData(action,data){
 }
 
 /* ---------- login ---------- */
-function enterApp(){ show("login",false); document.getElementById("app").style.display="block"; loadCourbes(); }
+function enterApp(){ show("login",false); document.getElementById("app").style.display="block"; loadCourbes(); loadAgregateurs(); }
 function logout(){
   TOKEN=null; sessionStorage.removeItem("ao_token");
   document.getElementById("app").style.display="none"; show("login",true);
@@ -371,6 +458,143 @@ document.getElementById("mSave").onclick=async()=>{
 
 /* fermer menus au clic extérieur */
 document.addEventListener("click",()=>document.querySelectorAll(".menu.open").forEach(m=>m.classList.remove("open")));
+
+/* ================= AGREGATEURS ================= */
+const HONO_TYPES={
+  pct_du_prix:{label:"% du prix de base",fields:[["pct","%"]]},
+  montant_eur_mwh:{label:"Montant €/MWh",fields:[["eur_mwh","€/MWh"]]},
+  plancher_fee_eur_mwh:{label:"Plancher fee €/MWh",fields:[["eur_mwh","€/MWh"]]},
+  plancher_periodique_eur:{label:"Plancher périodique €",fields:[["eur","€ / période"]]},
+  abonnement_eur_kwc_an:{label:"Abonnement €/kWc/an",fields:[["eur_kwc_an","€/kWc/an"]]},
+  frais_volume_ref:{label:"Frais volume-référence",fields:[["vref","V réf (MWh)"],["taux","€/MWh manquant"]]},
+};
+let aggEditId=null;
+let honoState=[]; // [{type, params:{...}}]
+
+function aggBadge(a){
+  const map={epex:"EPEX SPOT",prep:"PREP",fixe:"Prix fixe",aucun:"Coût pur"};
+  return map[a.prix_base]||a.prix_base;
+}
+function aggTileHTML(a){
+  const parts=[];
+  if(a.decote_eur_mwh) parts.push("décote "+a.decote_eur_mwh+" €/MWh");
+  if(a.prix_base==="fixe") parts.push(a.prix_fixe_eur_mwh+" €/MWh");
+  parts.push("partage "+ (a.partage_producteur_pct??100) +"%");
+  const nbH=(a.honoraires||[]).length;
+  parts.push(nbH+" composant"+(nbH>1?"s":"")+" d'honoraires");
+  return `
+  <div class="tile agg" data-id="${a.id}">
+    <button class="dots" title="Options">⋯</button>
+    <div class="menu">
+      <button data-act="edit">Modifier</button>
+      <button data-act="del" class="del">Supprimer</button>
+    </div>
+    <div class="name">${escapeHTML(a.nom)}</div>
+    <div class="sub2">${parts.join(" · ")}</div>
+    <div class="badge">${aggBadge(a)}</div>
+  </div>`;
+}
+async function loadAgregateurs(){
+  const grid=document.getElementById("aggGrid");
+  grid.innerHTML='<div class="empty">Chargement…</div>';
+  let list=[];
+  try{ list=(await apiData("list_agregateurs")).agregateurs||[]; }
+  catch(e){ grid.innerHTML=`<div class="empty warn">${e.message}</div>`; return; }
+  document.getElementById("aggCount").textContent=list.length+" agrégateur"+(list.length>1?"s":"");
+  grid.innerHTML=list.map(aggTileHTML).join("")+`
+    <div class="add" id="aggAdd">
+      <div class="plus">+</div>
+      <div>Nouvel agrégateur</div>
+      <small>Définir un mode de valorisation et ses honoraires.</small>
+    </div>`;
+  wireAggTiles(list);
+}
+function wireAggTiles(list){
+  document.getElementById("aggAdd").onclick=()=>openAgg(null);
+  document.querySelectorAll(".tile.agg").forEach(tile=>{
+    const id=tile.dataset.id;
+    const a=list.find(x=>x.id===id);
+    const dots=tile.querySelector(".dots"), menu=tile.querySelector(".menu");
+    dots.onclick=e=>{e.stopPropagation();document.querySelectorAll(".menu.open").forEach(m=>m!==menu&&m.classList.remove("open"));menu.classList.toggle("open");};
+    menu.querySelectorAll("button").forEach(b=>b.onclick=async e=>{
+      e.stopPropagation();menu.classList.remove("open");
+      if(b.dataset.act==="edit") openAgg(a);
+      if(b.dataset.act==="del"){
+        if(!confirm(`Supprimer « ${a.nom} » ?`))return;
+        try{await apiData("delete_agregateur",{id});toast("Agrégateur supprimé.");loadAgregateurs();}
+        catch(err){toast(err.message,true);}
+      }
+    });
+    tile.onclick=()=>{
+      const wasSel=tile.classList.contains("sel");
+      // (sélection multiple autorisée pour les agrégateurs — utile à la simulation)
+      tile.classList.toggle("sel",!wasSel);
+    };
+  });
+}
+
+/* ----- modale ----- */
+function honoRowHTML(item,idx){
+  const def=HONO_TYPES[item.type]||HONO_TYPES.montant_eur_mwh;
+  const opts=Object.entries(HONO_TYPES).map(([k,v])=>
+    `<option value="${k}" ${k===item.type?"selected":""}>${v.label}</option>`).join("");
+  const inputs=def.fields.map(([fk,flabel])=>
+    `<input type="number" step="0.01" data-idx="${idx}" data-fk="${fk}" placeholder="${flabel}" value="${item.params[fk]??""}">`).join("");
+  return `<div class="hono-item">
+    <select data-idx="${idx}" data-type="1">${opts}</select>
+    ${inputs}
+    <button class="x" data-idx="${idx}" type="button">✕</button>
+  </div>`;
+}
+function renderHono(){
+  const box=document.getElementById("aHono");
+  if(!honoState.length){box.innerHTML='<div class="empty" style="padding:2px">Aucun composant. Cliquez « + Ajouter ».</div>';return;}
+  box.innerHTML=honoState.map((it,i)=>honoRowHTML(it,i)).join("");
+  box.querySelectorAll("select[data-type]").forEach(s=>s.onchange=()=>{
+    const i=+s.dataset.idx; honoState[i]={type:s.value,params:{}}; renderHono();
+  });
+  box.querySelectorAll("input[data-fk]").forEach(inp=>inp.oninput=()=>{
+    const i=+inp.dataset.idx; honoState[i].params[inp.dataset.fk]=inp.value===""?null:Number(inp.value);
+  });
+  box.querySelectorAll("button.x").forEach(b=>b.onclick=()=>{honoState.splice(+b.dataset.idx,1);renderHono();});
+}
+document.getElementById("aAddHono").onclick=()=>{honoState.push({type:"montant_eur_mwh",params:{}});renderHono();};
+
+function openAgg(a){
+  aggEditId=a?a.id:null;
+  document.getElementById("aggTitle").textContent=a?"Modifier l'agrégateur":"Nouvel agrégateur";
+  document.getElementById("aNom").value=a?a.nom:"";
+  document.getElementById("aBase").value=a?a.prix_base:"aucun";
+  document.getElementById("aFixe").value=a?a.prix_fixe_eur_mwh??"":"";
+  document.getElementById("aDecote").value=a?a.decote_eur_mwh??"":"";
+  document.getElementById("aPartage").value=a?a.partage_producteur_pct??100:100;
+  document.getElementById("aPeriode").value=a?a.periodicite:"mensuel";
+  document.getElementById("aNeg").value=a?a.traitement_negatif:"plafonne_0";
+  document.getElementById("aNotes").value=a?a.notes??"":"";
+  honoState=a&&Array.isArray(a.honoraires)?JSON.parse(JSON.stringify(a.honoraires)):[];
+  renderHono();
+  document.getElementById("aggModal").classList.add("open");
+}
+document.getElementById("aCancel").onclick=()=>document.getElementById("aggModal").classList.remove("open");
+document.getElementById("aSave").onclick=async()=>{
+  const data={
+    nom:document.getElementById("aNom").value.trim()||"Sans nom",
+    prix_base:document.getElementById("aBase").value,
+    prix_fixe_eur_mwh:Number(document.getElementById("aFixe").value||0),
+    decote_eur_mwh:Number(document.getElementById("aDecote").value||0),
+    partage_producteur_pct:Number(document.getElementById("aPartage").value||100),
+    periodicite:document.getElementById("aPeriode").value,
+    traitement_negatif:document.getElementById("aNeg").value,
+    honoraires:honoState,
+    notes:document.getElementById("aNotes").value.trim()||null,
+  };
+  if(aggEditId) data.id=aggEditId;
+  try{
+    await apiData("upsert_agregateur",data);
+    document.getElementById("aggModal").classList.remove("open");
+    toast("Agrégateur enregistré."); loadAgregateurs();
+  }catch(e){toast(e.message,true);}
+};
 
 /* ---------- démarrage ---------- */
 if(TOKEN){ enterApp(); } else { show("login",true); }
