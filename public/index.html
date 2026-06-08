@@ -124,12 +124,12 @@
     font:inherit;background:#fbfcf9;color:var(--ink);outline:none}
   .modal select:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft);background:#fff}
   .hono{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px}
-  .hono-item{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .hono-item{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap}
   .hono-item select{flex:1 1 180px}
-  .hono-item input{flex:1 1 90px;width:auto}
+  .hono-item input{width:100%}
   .hono-item .x{border:none;background:#f0f2ec;color:var(--danger);border-radius:8px;
     cursor:pointer;font-weight:700;padding:8px 11px}
-  .hono-item .lbl{flex:1 1 100%;font-size:12px;color:var(--muted);margin:-4px 0 2px}
+  .hono-item .lbl{font-size:11px;color:var(--muted);margin:0 0 2px;line-height:1.2}
   .addHono{background:transparent;border:1px dashed #c5cfb6;color:var(--green-deep);
     border-radius:9px;padding:8px 12px;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
   .addHono:hover{background:var(--green-soft)}
@@ -487,7 +487,7 @@ const HONO_TYPES={
   plancher_fee_eur_mwh:{label:"Plancher fee €/MWh",fields:[["eur_mwh","€/MWh"]]},
   plancher_periodique_eur:{label:"Plancher périodique €",fields:[["eur","€ / période"]]},
   abonnement_eur_kwc_an:{label:"Abonnement €/kWc/an",fields:[["eur_kwc_an","€/kWc/an"]]},
-  frais_volume_ref:{label:"Frais volume-référence",fields:[["vref","V réf (MWh)"],["taux","€/MWh manquant"]]},
+  frais_volume_ref:{label:"Frais volume-référence",fields:[["vref","V réf (MWh)"],["taux","Tarif (€/MWh)"]]},
 };
 let aggEditId=null;
 let honoState=[]; // [{type, params:{...}}]
@@ -560,7 +560,10 @@ function honoRowHTML(item,idx){
   const opts=Object.entries(HONO_TYPES).map(([k,v])=>
     `<option value="${k}" ${k===item.type?"selected":""}>${v.label}</option>`).join("");
   const inputs=def.fields.map(([fk,flabel])=>
-    `<input type="number" step="0.01" data-idx="${idx}" data-fk="${fk}" placeholder="${flabel}" value="${item.params[fk]??""}">`).join("");
+    `<span style="display:inline-flex;flex-direction:column;flex:1 1 90px">`
+    +`<span class="lbl">${flabel}</span>`
+    +`<input type="number" step="0.01" data-idx="${idx}" data-fk="${fk}" value="${item.params[fk]??""}">`
+    +`</span>`).join("");
   return `<div class="hono-item">
     <select data-idx="${idx}" data-type="1">${opts}</select>
     ${inputs}
@@ -653,12 +656,14 @@ function renderCompare(res){
   if(res.results.length){
     html+=`<div class="cmp-card"><h3>Synthèse annuelle — ${escapeHTML(res.courbe.nom)} `
       +`<span style="font-weight:400;color:var(--muted);font-size:13px">(${res.results[0]?formatNb(res.results[0].annual.volume_mwh):0} MWh de surplus)</span></h3>`
-      +`<table class="cmp-table"><thead><tr><th>Agrégateur</th><th>Vente</th><th>Coût agrégateur</th><th>Net producteur</th></tr></thead><tbody>`;
+      +`<table class="cmp-table"><thead><tr><th>Agrégateur</th><th>Vente</th><th>Coût agrégateur</th><th>Net producteur</th><th>Net €/MWh</th></tr></thead><tbody>`;
     res.results.slice().sort((a,b)=>b.annual.net-a.annual.net).forEach(r=>{
+      const netMwh = r.annual.volume_mwh ? r.annual.net / r.annual.volume_mwh : 0;
       html+=`<tr><td>${escapeHTML(r.nom)}</td>`
         +`<td class="mono">${fmtEur(r.annual.vente)}</td>`
         +`<td class="mono">${fmtEur(r.annual.cout)}</td>`
-        +`<td class="mono net ${r.annual.net<0?"neg":""}">${fmtEur(r.annual.net)}</td></tr>`;
+        +`<td class="mono net ${r.annual.net<0?"neg":""}">${fmtEur(r.annual.net)}</td>`
+        +`<td class="mono ${netMwh<0?"neg":""}">${netMwh.toLocaleString("fr-FR",{maximumFractionDigits:2})} €/MWh</td></tr>`;
     });
     html+=`</tbody></table></div>`;
     res.results.forEach(r=>{
