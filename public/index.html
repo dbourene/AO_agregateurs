@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="./vendor/xlsx.full.min.js"></script>
+<script src="./vendor/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#f4f5f2; --panel:#ffffff; --ink:#1c2218; --muted:#6b7368;
@@ -132,6 +133,17 @@
   .addHono{background:transparent;border:1px dashed #c5cfb6;color:var(--green-deep);
     border-radius:9px;padding:8px 12px;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
   .addHono:hover{background:var(--green-soft)}
+
+/* ---------- COMPARAISON ---------- */
+  .cmp-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px}
+  .cmp-card h3{margin:0 0 12px;font-size:16px;display:flex;align-items:center;gap:10px}
+  .cmp-table{width:100%;border-collapse:collapse;font-size:14px}
+  .cmp-table th,.cmp-table td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .cmp-table th:first-child,.cmp-table td:first-child{text-align:left}
+  .cmp-table td.net{font-weight:700;color:var(--green-deep)}
+  .cmp-table td.neg{color:var(--danger)}
+  .chart-wrap{position:relative;height:260px}
 </style>
 </head>
 <body>
@@ -166,6 +178,15 @@
     <span class="count" id="aggCount"></span>
   </div>
   <div class="grid" id="aggGrid"></div>
+
+  <div class="section-h" style="margin-top:38px">
+    <h2>Comparaison</h2>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <button class="btn" id="btnCompare">Comparer la sélection</button>
+    <span class="count" id="cmpHint">Sélectionnez 1 courbe et au moins 1 agrégateur.</span>
+  </div>
+  <div id="cmpResults"></div>
 </div>
 
 <!-- MODAL création -->
@@ -370,7 +391,7 @@ function wireTiles(){
     // sélection (une seule)
     tile.onclick=()=>{
       const wasSel=tile.classList.contains("sel");
-      document.querySelectorAll(".tile.sel").forEach(t=>t.classList.remove("sel"));
+      document.querySelectorAll("#courbesGrid .tile.sel").forEach(t=>t.classList.remove("sel"));
       if(!wasSel) tile.classList.add("sel");
     };
     // drop pour mise à jour
@@ -595,6 +616,74 @@ document.getElementById("aSave").onclick=async()=>{
     toast("Agrégateur enregistré."); loadAgregateurs();
   }catch(e){toast(e.message,true);}
 };
+
+/* ================= COMPARAISON ================= */
+const MONTHS=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
+const BADGE={epex:"EPEX SPOT",prep:"PREP",fixe:"Prix fixe",aucun:"Coût pur"};
+let cmpCharts=[];
+function fmtEur(n){return (n||0).toLocaleString("fr-FR",{maximumFractionDigits:0})+" €";}
+
+async function apiSimulate(courbe_id,agregateur_ids){
+  const r=await fetch(FN+"/ao-simulate",{method:"POST",
+    headers:{"Content-Type":"application/json","X-AO-Token":TOKEN||""},
+    body:JSON.stringify({courbe_id,agregateur_ids})});
+  if(r.status===401){logout();throw new Error("session expirée");}
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.detail||j.error||"erreur");
+  return j;
+}
+
+document.getElementById("btnCompare").onclick=async()=>{
+  const cTile=document.querySelector("#courbesGrid .tile.sel");
+  const aTiles=[...document.querySelectorAll("#aggGrid .tile.sel")];
+  if(!cTile){toast("Sélectionnez une courbe.",true);return;}
+  if(!aTiles.length){toast("Sélectionnez au moins un agrégateur.",true);return;}
+  const box=document.getElementById("cmpResults");
+  box.innerHTML='<div class="empty">Calcul en cours…</div>';
+  cmpCharts.forEach(c=>c.destroy()); cmpCharts=[];
+  try{
+    const res=await apiSimulate(cTile.dataset.id,aTiles.map(t=>t.dataset.id));
+    renderCompare(res);
+  }catch(e){ box.innerHTML=`<div class="empty warn">${e.message}</div>`; }
+};
+
+function renderCompare(res){
+  const box=document.getElementById("cmpResults");
+  let html="";
+  if(res.results.length){
+    html+=`<div class="cmp-card"><h3>Synthèse annuelle — ${escapeHTML(res.courbe.nom)} `
+      +`<span style="font-weight:400;color:var(--muted);font-size:13px">(${res.results[0]?formatNb(res.results[0].annual.volume_mwh):0} MWh de surplus)</span></h3>`
+      +`<table class="cmp-table"><thead><tr><th>Agrégateur</th><th>Vente</th><th>Coût agrégateur</th><th>Net producteur</th></tr></thead><tbody>`;
+    res.results.slice().sort((a,b)=>b.annual.net-a.annual.net).forEach(r=>{
+      html+=`<tr><td>${escapeHTML(r.nom)}</td>`
+        +`<td class="mono">${fmtEur(r.annual.vente)}</td>`
+        +`<td class="mono">${fmtEur(r.annual.cout)}</td>`
+        +`<td class="mono net ${r.annual.net<0?"neg":""}">${fmtEur(r.annual.net)}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    res.results.forEach(r=>{
+      html+=`<div class="cmp-card"><h3>${escapeHTML(r.nom)} <span class="badge">${BADGE[r.prix_base]||r.prix_base}</span></h3>`
+        +`<div class="chart-wrap"><canvas id="cv_${r.agregateur_id}"></canvas></div></div>`;
+    });
+  }else{
+    html+=`<div class="empty">Aucun résultat calculable.</div>`;
+  }
+  if(res.notes&&res.notes.length) html+=`<div class="empty warn">${res.notes.map(escapeHTML).join("<br>")}</div>`;
+  box.innerHTML=html;
+
+  res.results.forEach(r=>{
+    const ctx=document.getElementById("cv_"+r.agregateur_id); if(!ctx)return;
+    const vente=MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.vente:0;});
+    const cout =MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.cout:0;});
+    cmpCharts.push(new Chart(ctx,{type:"bar",
+      data:{labels:MONTHS,datasets:[
+        {label:"Vente",data:vente,backgroundColor:"#74a83f"},
+        {label:"Coût agrégateur",data:cout,backgroundColor:"#d98a3a"}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{y:{ticks:{callback:v=>v+" €"}}},
+        plugins:{legend:{position:"bottom"}}}}));
+  });
+}
 
 /* ---------- démarrage ---------- */
 if(TOKEN){ enterApp(); } else { show("login",true); }
