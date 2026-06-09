@@ -382,7 +382,7 @@ async function loadCourbes(){
 
 /* ---------- interactions vignettes ---------- */
 function wireTiles(){
-  document.querySelectorAll(".tile").forEach(tile=>{
+  document.querySelectorAll("#courbesGrid .tile").forEach(tile=>{
     const id=tile.dataset.id;
     // menu ⋯
     const dots=tile.querySelector(".dots"), menu=tile.querySelector(".menu");
