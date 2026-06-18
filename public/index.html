@@ -680,6 +680,8 @@ function renderCompare(res){
     const ctx=document.getElementById("cv_"+r.agregateur_id); if(!ctx)return;
     const vente=MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.vente:0;});
     const cout =MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.cout:0;});
+    // frais annuels (volume-référence) non répartis : on les pose sur décembre (dernier mois)
+    if(r.annual.frais_volume_ref) cout[11]+=r.annual.frais_volume_ref;
     cmpCharts.push(new Chart(ctx,{type:"bar",
       data:{labels:MONTHS,datasets:[
         {label:"Vente",data:vente,backgroundColor:"#74a83f"},
