@@ -168,12 +168,18 @@ Deno.serve(async (req) => {
         volKwh += s15;
       }
 
-      const aboM = (aboKwcAn > 0 && kwc) ? kwc * aboKwcAn / 12 : 0;
+      const aboAn = (aboKwcAn > 0 && kwc) ? kwc * aboKwcAn : 0;
+      // ⚠️ months est rendu dans l'ordre de la FENÊTRE GLISSANTE, pas dans l'ordre calendaire :
+      // months[0] est le 1er des 12 mois révolus. `mois` reste le n° de mois civil (1..12).
+      // ⛔ Les charges annuelles (abonnement, frais fixe) sont prélevées EN TOTALITÉ sur ce
+      // 1er mois, et non lissées sur douze : c'est ainsi qu'elles sont facturées.
+      const ordreMois = Array.from({ length: 12 }, (_, k) => ((curM - 1 + k) % 12) + 1);
       const months = [];
       let venteAn = 0, coutAn = 0;
-      for (let m = 1; m <= 12; m++) {
+      for (let k = 0; k < 12; k++) {
+        const m = ordreMois[k];
         const feePer = plancherPer != null ? Math.max(feevar[m], plancherPer) : feevar[m];
-        const coutHon = feePer + aboM;
+        const coutHon = feePer + (k === 0 ? aboAn + fraisFixeAn : 0);
         const venteM = vente[m];
         const net = (venteM < 0 && (trait === "impute_100" || trait === "reporte"))
           ? venteM - coutHon : partage * venteM - coutHon;
@@ -183,7 +189,7 @@ Deno.serve(async (req) => {
       }
       const volMwh = volKwh / 1000;
       const fraisVR = fvr ? Math.max(0, ((Number(fvr.params?.vref) || 0) - volMwh) * (Number(fvr.params?.taux) || 0)) : 0;
-      coutAn += fraisVR + fraisFixeAn;
+      coutAn += fraisVR; // ⛔ fraisFixeAn est DÉJÀ dans coutAn : il est prélevé sur months[0].
       return {
         agregateur_id: a.id, nom: a.nom, prix_base: a.prix_base, months,
         annual: {

@@ -687,17 +687,16 @@ function renderCompare(res){
 
   res.results.forEach(r=>{
     const ctx=document.getElementById("cv_"+r.agregateur_id); if(!ctx)return;
-    const vente=MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.vente:0;});
-    const cout =MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.cout:0;});
-    // frais annuels (volume-référence) non répartis : on les pose sur décembre (dernier mois)
-    if(r.annual.frais_volume_ref) cout[11]+=r.annual.frais_volume_ref;
-    // frais fixe annuel : posé en totalité sur le 1er mois de la période glissante
-    if(r.annual.frais_fixe_annuel){
-      const iDeb=((res.periode&&res.periode.mois_debut)||1)-1;
-      cout[iDeb]+=r.annual.frais_fixe_annuel;
-    }
+    // L'axe suit l'ORDRE DE LA PÉRIODE GLISSANTE renvoyé par le back, pas l'ordre calendaire :
+    // la 1re barre est le 1er des 12 mois révolus. Abonnement et frais fixe y sont déjà inclus.
+    const mois=r.months||[];
+    const labels=mois.map(m=>MONTHS[m.mois-1]);
+    const vente=mois.map(m=>m.vente);
+    const cout =mois.map(m=>m.cout);
+    // frais volume-référence : connus seulement en fin de période, posés sur le DERNIER mois
+    if(r.annual.frais_volume_ref&&cout.length) cout[cout.length-1]+=r.annual.frais_volume_ref;
     cmpCharts.push(new Chart(ctx,{type:"bar",
-      data:{labels:MONTHS,datasets:[
+      data:{labels,datasets:[
         {label:"Vente",data:vente,backgroundColor:"#74a83f"},
         {label:"Coût agrégateur",data:cout,backgroundColor:"#d98a3a"}]},
       options:{responsive:true,maintainAspectRatio:false,
