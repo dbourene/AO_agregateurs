@@ -487,6 +487,7 @@ const HONO_TYPES={
   plancher_fee_eur_mwh:{label:"Plancher fee €/MWh",fields:[["eur_mwh","€/MWh"]]},
   plancher_periodique_eur:{label:"Plancher périodique €",fields:[["eur","€ / période"]]},
   abonnement_eur_kwc_an:{label:"Abonnement €/kWc/an",fields:[["eur_kwc_an","€/kWc/an"]]},
+  frais_fixe_eur_an:{label:"Frais fixe annuel €/an",fields:[["eur_an","€ HT/an"]]},
   frais_volume_ref:{label:"Frais volume-référence",fields:[["vref","V réf (MWh)"],["taux","Tarif (€/MWh)"]]},
 };
 let aggEditId=null;
@@ -650,12 +651,20 @@ document.getElementById("btnCompare").onclick=async()=>{
   }catch(e){ box.innerHTML=`<div class="empty warn">${e.message}</div>`; }
 };
 
+/* « — Sep 2025 → Aoû 2026 » à partir des bornes renvoyées par ao-simulate */
+function periodeLabel(res){
+  const p=res.periode; if(!p||!p.start||!p.end) return "";
+  const d=new Date(p.start), f=new Date(new Date(p.end).getTime()-86400000);
+  const g=x=>MONTHS[+new Intl.DateTimeFormat("fr-FR",{timeZone:"Europe/Paris",month:"numeric"}).format(x)-1]
+          +" "+new Intl.DateTimeFormat("fr-FR",{timeZone:"Europe/Paris",year:"numeric"}).format(x);
+  return ` — ${g(d)} → ${g(f)}`;
+}
 function renderCompare(res){
   const box=document.getElementById("cmpResults");
   let html="";
   if(res.results.length){
     html+=`<div class="cmp-card"><h3>Synthèse annuelle — ${escapeHTML(res.courbe.nom)} `
-      +`<span style="font-weight:400;color:var(--muted);font-size:13px">(${res.results[0]?formatNb(res.results[0].annual.volume_mwh):0} MWh de surplus)</span></h3>`
+      +`<span style="font-weight:400;color:var(--muted);font-size:13px">(${res.results[0]?formatNb(res.results[0].annual.volume_mwh):0} MWh de surplus${periodeLabel(res)})</span></h3>`
       +`<table class="cmp-table"><thead><tr><th>Agrégateur</th><th>Vente</th><th>Coût agrégateur</th><th>Net producteur</th><th>Net €/MWh</th></tr></thead><tbody>`;
     res.results.slice().sort((a,b)=>b.annual.net-a.annual.net).forEach(r=>{
       const netMwh = r.annual.volume_mwh ? r.annual.net / r.annual.volume_mwh : 0;
@@ -682,6 +691,11 @@ function renderCompare(res){
     const cout =MONTHS.map((_,i)=>{const m=r.months.find(x=>x.mois===i+1);return m?m.cout:0;});
     // frais annuels (volume-référence) non répartis : on les pose sur décembre (dernier mois)
     if(r.annual.frais_volume_ref) cout[11]+=r.annual.frais_volume_ref;
+    // frais fixe annuel : posé en totalité sur le 1er mois de la période glissante
+    if(r.annual.frais_fixe_annuel){
+      const iDeb=((res.periode&&res.periode.mois_debut)||1)-1;
+      cout[iDeb]+=r.annual.frais_fixe_annuel;
+    }
     cmpCharts.push(new Chart(ctx,{type:"bar",
       data:{labels:MONTHS,datasets:[
         {label:"Vente",data:vente,backgroundColor:"#74a83f"},
